@@ -1,0 +1,36 @@
+name: Build e deploy tarefas
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-tarefas
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar imagem e empacotar
+        run: |
+          docker build -t "tarefas-api:$GITHUB_SHA" .
+          docker save "tarefas-api:$GITHUB_SHA" | gzip > "image-$GITHUB_SHA.tar.gz"
+          tar -czf "release-$GITHUB_SHA.tar.gz" compose.yml scripts/deploy.sh
+      - name: Publicar EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/deploy' EXIT
+          scp -i ~/.ssh/deploy -o StrictHostKeyChecking=yes "image-$GITHUB_SHA.tar.gz" "release-$GITHUB_SHA.tar.gz" "$EC2_USER@$EC2_HOST:/opt/prova-tarefas/incoming/"
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "$EC2_USER@$EC2_HOST" "bash -o pipefail -c 'tar -xOzf /opt/prova-tarefas/incoming/release-$GITHUB_SHA.tar.gz scripts/deploy.sh | bash -s -- $GITHUB_SHA'"
