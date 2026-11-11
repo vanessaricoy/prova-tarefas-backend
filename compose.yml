@@ -1,6 +1,7 @@
 name: prova-tarefas
 services:
   db:
+    mem_limit: 256m
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -15,6 +16,7 @@ services:
       timeout: 5s
       retries: 20
   api:
+    mem_limit: 512m
     image: ${API_IMAGE:-tarefas-api:local}
     build: .
     restart: unless-stopped

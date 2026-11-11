@@ -9,6 +9,7 @@ flock -n 9 || { echo 'Deploy em execução';exit 1; }
 mkdir -p "releases/$sha"
 tar -xzf "incoming/release-$sha.tar.gz" -C "releases/$sha"
 gzip -dc "incoming/image-$sha.tar.gz" | sudo -n docker load
+rm -f "incoming/image-$sha.tar.gz"
 export API_IMAGE="tarefas-api:$sha"
 sudo -n env API_IMAGE="$API_IMAGE" docker compose --project-directory /opt/prova-tarefas --env-file /opt/prova-tarefas/.env -f "releases/$sha/compose.yml" up -d --no-build
 for attempt in $(seq 1 60); do
